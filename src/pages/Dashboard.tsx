@@ -3,8 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type Task, type Project, useProjects, useTasks, useAddProject, useAddTask, useUpdateTask, useDeleteTask } from "../hooks/useProject&Task";
+import { type Task, useProjects, useTasks, useAddProject, useAddTask, useUpdateTask, useDeleteTask } from "../hooks/useProject&Task";
 const projectSchema = z.object({
   name: z.string().min(1, "Project name is required"),
 });
@@ -18,8 +17,6 @@ export default function Dashboard() {
   const [taskName, setTaskName] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [taskProjectId, setTaskProjectId] = useState("");
-
-  const queryClient = useQueryClient();
 
   const projectForm = useForm<{ name: string }>({
     resolver: zodResolver(projectSchema),
