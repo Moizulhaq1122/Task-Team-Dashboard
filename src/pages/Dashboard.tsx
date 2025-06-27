@@ -3,9 +3,24 @@ import { supabase } from "../lib/supabase";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type Task, useProjects, useTasks, useAddProject, useAddTask, useUpdateTask, useDeleteTask } from "../hooks/useProject&Task";
+import {
+  type Task,
+  useProjects,
+  useTasks,
+  useAddProject,
+  useAddTask,
+  useUpdateTask,
+  useDeleteTask,
+} from "../hooks/useProject&Task";
+
 const projectSchema = z.object({
   name: z.string().min(1, "Project name is required"),
+});
+
+const taskSchema = z.object({
+  name: z.string().min(1, "Task name is required"),
+  description: z.string().optional(),
+  project_id: z.string().min(1, "Project is required"),
 });
 
 export default function Dashboard() {
@@ -13,13 +28,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  // Controlled task inputs (your style)
-  const [taskName, setTaskName] = useState("");
-  const [taskDescription, setTaskDescription] = useState("");
-  const [taskProjectId, setTaskProjectId] = useState("");
-
   const projectForm = useForm<{ name: string }>({
     resolver: zodResolver(projectSchema),
+  });
+
+  const taskForm = useForm<{ name: string; description?: string; project_id: string }>({
+    resolver: zodResolver(taskSchema),
   });
 
   useEffect(() => {
@@ -40,40 +54,30 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (editingTask) {
-      setTaskName(editingTask.name);
-      setTaskDescription(editingTask.description || "");
-      setTaskProjectId(editingTask.project_id);
+      taskForm.reset({
+        name: editingTask.name,
+        description: editingTask.description || "",
+        project_id: editingTask.project_id,
+      });
+    } else {
+      taskForm.reset({
+        name: "",
+        description: "",
+        project_id: "",
+      });
     }
-  }, [editingTask]);
+  }, [editingTask, taskForm]);
 
   const { data: projects } = useProjects(session);
-
   const { data: tasks } = useTasks(session);
 
-  const addProject = useAddProject(() => {
-    projectForm.reset();
-  });
-
-  const addTask = useAddTask(() => {
-    resetTaskForm();
-  });
-
+  const addProject = useAddProject(() => projectForm.reset());
+  const addTask = useAddTask(() => taskForm.reset());
   const updateTask = useUpdateTask(() => {
-    resetTaskForm();
-  });
-
-  const deleteTask = useDeleteTask();
-
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-  };
-
-  const resetTaskForm = () => {
     setEditingTask(null);
-    setTaskName("");
-    setTaskDescription("");
-    setTaskProjectId("");
-  };
+    taskForm.reset();
+  });
+  const deleteTask = useDeleteTask();
 
   if (loading) return <div className="p-6 text-center">Loading session...</div>;
   if (!session) return <div className="p-6 text-center">Not logged in</div>;
@@ -84,9 +88,7 @@ export default function Dashboard() {
 
       {/* Project Form */}
       <form
-        onSubmit={projectForm.handleSubmit((values) =>
-          addProject.mutate(values)
-        )}
+        onSubmit={projectForm.handleSubmit((values) => addProject.mutate(values))}
         className="bg-white shadow-md rounded p-6"
       >
         <h2 className="text-xl font-semibold mb-4">Create Project</h2>
@@ -110,46 +112,46 @@ export default function Dashboard() {
 
       {/* Task Form */}
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={taskForm.handleSubmit((values) => {
           if (editingTask) {
-            updateTask.mutate(
-              {
-                id: editingTask.id,
-                name: taskName,
-                description: taskDescription,
-                project_id: taskProjectId,
-              } as Task,
-            );
+            updateTask.mutate({
+              ...values as Task,
+              id: editingTask.id,
+            });
           } else {
-            addTask.mutate({
-              name: taskName,
-              description: taskDescription,
-              project_id: taskProjectId,
-            } as Task);
+            addTask.mutate(values as Task);
           }
-        }}
+        })}
         className="bg-white shadow-md rounded p-6"
       >
         <h2 className="text-xl font-semibold mb-4">
           {editingTask ? "Edit Task" : "Create Task"}
         </h2>
         <input
+          {...taskForm.register("name")}
           className="border p-2 w-full mb-2 rounded"
           placeholder="Task Name"
-          value={taskName}
-          onChange={(e) => setTaskName(e.target.value)}
         />
+        {taskForm.formState.errors.name && (
+          <p className="text-red-500 text-sm">
+            {taskForm.formState.errors.name.message}
+          </p>
+        )}
+
         <textarea
+          {...taskForm.register("description")}
           className="border p-2 w-full mb-2 rounded"
           placeholder="Task Description (optional)"
-          value={taskDescription}
-          onChange={(e) => setTaskDescription(e.target.value)}
         />
+        {taskForm.formState.errors.description && (
+          <p className="text-red-500 text-sm">
+            {taskForm.formState.errors.description.message}
+          </p>
+        )}
+
         <select
+          {...taskForm.register("project_id")}
           className="border p-2 w-full mb-2 rounded"
-          value={taskProjectId}
-          onChange={(e) => setTaskProjectId(e.target.value)}
         >
           <option value="">Select Project</option>
           {projects?.map((project) => (
@@ -158,6 +160,11 @@ export default function Dashboard() {
             </option>
           ))}
         </select>
+        {taskForm.formState.errors.project_id && (
+          <p className="text-red-500 text-sm">
+            {taskForm.formState.errors.project_id.message}
+          </p>
+        )}
 
         <div className="flex gap-2">
           <button
@@ -173,7 +180,7 @@ export default function Dashboard() {
           {editingTask && (
             <button
               type="button"
-              onClick={resetTaskForm}
+              onClick={() => setEditingTask(null)}
               className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
             >
               Cancel
@@ -218,7 +225,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleEdit(task)}
+                    onClick={() => setEditingTask(task)}
                     className="text-blue-600 hover:underline"
                   >
                     Edit
